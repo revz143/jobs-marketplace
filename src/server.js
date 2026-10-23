@@ -15,6 +15,7 @@ class HttpError extends Error {
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     let rawData = '';
+    req.setEncoding('utf8');
 
     req.on('data', (chunk) => {
       rawData += chunk;

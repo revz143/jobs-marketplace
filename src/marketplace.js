@@ -1,5 +1,14 @@
-class MarketplaceValidationError extends Error {}
-class MarketplaceNotFoundError extends Error {}
+class MarketplaceValidationError extends Error {
+  constructor(message) {
+    super(message);
+  }
+}
+
+class MarketplaceNotFoundError extends Error {
+  constructor(message) {
+    super(message);
+  }
+}
 
 function createMarketplace() {
   const jobs = [];
