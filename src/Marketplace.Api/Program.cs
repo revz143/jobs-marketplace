@@ -18,7 +18,12 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.Password.RequiredLength = 8; options.Password.RequireDigit = true; options.Password.RequireUppercase = true; options.Lockout.MaxFailedAccessAttempts = 5; options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
 }).AddEntityFrameworkStores<MarketplaceDbContext>().AddDefaultTokenProviders();
 builder.Services.ConfigureApplicationCookie(options => { options.Cookie.Name = "marketplace.auth"; options.Cookie.HttpOnly = true; options.Cookie.SameSite = SameSiteMode.Lax; options.Cookie.SecurePolicy = builder.Environment.IsProduction() ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest; options.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; }; });
-builder.Services.AddAuthorization(); builder.Services.AddOpenApi();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AppRoles.Customer, policy => policy.RequireRole(AppRoles.Customer));
+    options.AddPolicy(AppRoles.Contractor, policy => policy.RequireRole(AppRoles.Contractor));
+});
+builder.Services.AddOpenApi();
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddRateLimiter(options =>
 {
