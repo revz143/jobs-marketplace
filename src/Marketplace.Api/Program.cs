@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using System.Security.Cryptography;
+using System.Text.Json.Serialization;
 using Marketplace.Api;
 using Marketplace.Core;
 using Marketplace.Persistence;
@@ -18,6 +19,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 }).AddEntityFrameworkStores<MarketplaceDbContext>().AddDefaultTokenProviders();
 builder.Services.ConfigureApplicationCookie(options => { options.Cookie.Name = "marketplace.auth"; options.Cookie.HttpOnly = true; options.Cookie.SameSite = SameSiteMode.Lax; options.Cookie.SecurePolicy = builder.Environment.IsProduction() ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest; options.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; }; });
 builder.Services.AddAuthorization(); builder.Services.AddOpenApi();
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
