@@ -1,9 +1,9 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
 
-type Me = { email: string; role: "Customer" | "Contractor"; profileId: string; displayName: string };
-type Job = { id: string; customerId: string; startDate: string; dueDate: string; budget: string; description: string; status: "Open" | "Awarded"; acceptedBy: string | null; createdAt: string };
-type Offer = { id: string; jobId: string; contractorId: string; price: string; isOverBudget: boolean; createdAt: string };
+type Me = { email: string; role: "Customer" | "Contractor"; profileId: number; displayName: string };
+type Job = { id: number; customerId: number; startDate: string; dueDate: string; budget: number; description: string; status: "Open" | "Awarded"; acceptedBy: number | null; createdAt: string };
+type Offer = { id: number; jobId: number; contractorId: number; price: number; isOverBudget: boolean; createdAt: string };
 const api = "/backend/api/v1";
 
 async function csrf() { await fetch(`${api}/auth/csrf`, { credentials: "include" }); }
