@@ -1,3 +1,6 @@
+class MarketplaceValidationError extends Error {}
+class MarketplaceNotFoundError extends Error {}
+
 function createMarketplace() {
   const jobs = [];
   const subcontractors = [];
@@ -15,7 +18,7 @@ function createMarketplace() {
   function createJob(input) {
     const title = typeof input?.title === 'string' ? input.title.trim() : '';
     if (!title) {
-      throw new Error('Job title is required');
+      throw new MarketplaceValidationError('Job title is required');
     }
 
     const job = {
@@ -31,7 +34,7 @@ function createMarketplace() {
   function createSubcontractor(input) {
     const name = typeof input?.name === 'string' ? input.name.trim() : '';
     if (!name) {
-      throw new Error('Subcontractor name is required');
+      throw new MarketplaceValidationError('Subcontractor name is required');
     }
 
     const subcontractor = {
@@ -46,12 +49,12 @@ function createMarketplace() {
   function outsourceJob(jobId, subcontractorId) {
     const job = jobs.find((item) => item.id === jobId);
     if (!job) {
-      throw new Error('Job not found');
+      throw new MarketplaceNotFoundError('Job not found');
     }
 
     const subcontractor = subcontractors.find((item) => item.id === subcontractorId);
     if (!subcontractor) {
-      throw new Error('Subcontractor not found');
+      throw new MarketplaceNotFoundError('Subcontractor not found');
     }
 
     job.assignedSubcontractorId = subcontractorId;
@@ -69,4 +72,6 @@ function createMarketplace() {
 
 module.exports = {
   createMarketplace,
+  MarketplaceValidationError,
+  MarketplaceNotFoundError,
 };

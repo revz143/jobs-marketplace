@@ -84,6 +84,19 @@ test('returns validation errors for missing required fields', async () => {
   });
 });
 
+test('returns validation error for missing subcontractor name', async () => {
+  await withServer(async (baseUrl) => {
+    const createSubcontractorResponse = await request(baseUrl, '/subcontractors', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    assert.equal(createSubcontractorResponse.status, 400);
+    const body = await createSubcontractorResponse.json();
+    assert.equal(body.error, 'Subcontractor name is required');
+  });
+});
+
 test('returns not found when outsourcing a missing job', async () => {
   await withServer(async (baseUrl) => {
     const createSubcontractorResponse = await request(baseUrl, '/subcontractors', {

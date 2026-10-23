@@ -1,5 +1,9 @@
 const http = require('http');
-const { createMarketplace } = require('./marketplace');
+const {
+  createMarketplace,
+  MarketplaceNotFoundError,
+  MarketplaceValidationError,
+} = require('./marketplace');
 
 class HttpError extends Error {
   constructor(statusCode, message) {
@@ -59,12 +63,7 @@ function createApiServer() {
 
       if (method === 'POST' && url.pathname === '/jobs') {
         const payload = await readJsonBody(req);
-        let job;
-        try {
-          job = marketplace.createJob(payload);
-        } catch (error) {
-          throw new HttpError(400, error.message);
-        }
+        const job = marketplace.createJob(payload);
         sendJson(res, 201, { job });
         return;
       }
@@ -76,12 +75,7 @@ function createApiServer() {
 
       if (method === 'POST' && url.pathname === '/subcontractors') {
         const payload = await readJsonBody(req);
-        let subcontractor;
-        try {
-          subcontractor = marketplace.createSubcontractor(payload);
-        } catch (error) {
-          throw new HttpError(400, error.message);
-        }
+        const subcontractor = marketplace.createSubcontractor(payload);
         sendJson(res, 201, { subcontractor });
         return;
       }
@@ -94,16 +88,7 @@ function createApiServer() {
         if (typeof subcontractorId !== 'number' || !Number.isInteger(subcontractorId) || subcontractorId < 1) {
           throw new HttpError(400, 'Valid subcontractorId is required');
         }
-        let job;
-        try {
-          job = marketplace.outsourceJob(jobId, subcontractorId);
-        } catch (error) {
-          if (error.message === 'Job not found' || error.message === 'Subcontractor not found') {
-            throw new HttpError(404, error.message);
-          }
-
-          throw new HttpError(400, error.message);
-        }
+        const job = marketplace.outsourceJob(jobId, subcontractorId);
         sendJson(res, 200, { job });
         return;
       }
@@ -112,6 +97,16 @@ function createApiServer() {
     } catch (error) {
       if (error instanceof HttpError) {
         sendJson(res, error.statusCode, { error: error.message });
+        return;
+      }
+
+      if (error instanceof MarketplaceValidationError) {
+        sendJson(res, 400, { error: error.message });
+        return;
+      }
+
+      if (error instanceof MarketplaceNotFoundError) {
+        sendJson(res, 404, { error: error.message });
         return;
       }
 
