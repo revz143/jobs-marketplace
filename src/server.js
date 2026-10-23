@@ -90,8 +90,8 @@ function createApiServer() {
       if (method === 'POST' && outsourceMatch) {
         const jobId = Number(outsourceMatch[1]);
         const payload = await readJsonBody(req);
-        const subcontractorId = Number(payload.subcontractorId);
-        if (!Number.isInteger(subcontractorId) || subcontractorId < 1) {
+        const subcontractorId = payload.subcontractorId;
+        if (typeof subcontractorId !== 'number' || !Number.isInteger(subcontractorId) || subcontractorId < 1) {
           throw new HttpError(400, 'Valid subcontractorId is required');
         }
         let job;

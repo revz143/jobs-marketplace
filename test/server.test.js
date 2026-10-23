@@ -63,9 +63,9 @@ test('creates jobs and outsources them to subcontractors', async () => {
 
     assert.deepEqual(jobsBody.jobs, [
       {
-        id: 1,
+        id: createJobBody.job.id,
         title: 'Build landing page',
-        assignedSubcontractorId: 1,
+        assignedSubcontractorId: createSubcontractorBody.subcontractor.id,
       },
     ]);
   });
