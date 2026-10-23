@@ -99,7 +99,3 @@ dotnet test JobsMarketplace.sln --configuration Release
 The included GitHub Actions workflow builds the frontend and runs backend tests. Before submitting, run `docker compose up --build` on a clean checkout and complete the walkthrough above. For a performance record, use a five-minute, 50-concurrent-user test against the local API, record machine resources, dataset size, p50/p95 latency, errors, connection usage, and cache behavior in your submission notes.
 
 The normal demonstration dataset and a local test are evidence that search paths and constraints are designed to scale. They are not proof of capacity for 10 million customers; that requires production-sized data, an environment representative of the target host, monitoring, and load testing.
-
-## Deliberately out of scope
-
-Public registration, password recovery, payment processing, messages, reviews, award reopening, cloud deployment, and cross-instance cache invalidation are not part of the weekend submission.
