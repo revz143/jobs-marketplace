@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+**/.next/
+**/node_modules/
+.env
+data-protection-keys/
+TestResults/
+coverage/

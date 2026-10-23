@@ -1,0 +1,20 @@
+@host = http://localhost:8080
+@customerEmail = customer1@marketplace.test
+@contractorEmail = contractor1@marketplace.test
+@password = Demo!12345
+
+### Request a CSRF cookie and token before unsafe calls.
+GET {{host}}/api/v1/auth/csrf
+
+### Login (your HTTP client must send the XSRF cookie value in X-XSRF-TOKEN).
+POST {{host}}/api/v1/auth/login
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"email":"{{customerEmail}}","password":"{{password}}"}
+
+### Search customers
+GET {{host}}/api/v1/customers?lastName=sm&limit=20
+
+### Browse open jobs
+GET {{host}}/api/v1/jobs?status=Open&limit=20

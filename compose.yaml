@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: marketplace
+      POSTGRES_USER: marketplace
+      POSTGRES_PASSWORD: marketplace
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketplace -d marketplace"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks: [marketplace]
+  migrate:
+    build:
+      context: .
+      dockerfile: src/Marketplace.Api/Dockerfile
+    command: ["--migrate"]
+    environment:
+      ConnectionStrings__Marketplace: Host=db;Port=5432;Database=marketplace;Username=marketplace;Password=marketplace;Maximum Pool Size=10;Timeout=3;Command Timeout=3
+    volumes:
+      - data-protection-keys:/keys
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [marketplace]
+  api:
+    build:
+      context: .
+      dockerfile: src/Marketplace.Api/Dockerfile
+    environment:
+      ConnectionStrings__Marketplace: Host=db;Port=5432;Database=marketplace;Username=marketplace;Password=marketplace;Maximum Pool Size=40;Timeout=3;Command Timeout=3
+    volumes:
+      - data-protection-keys:/keys
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [marketplace]
+  web:
+    build:
+      context: ./frontend
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [marketplace]
+networks:
+  marketplace:
+volumes:
+  postgres-data:
+  data-protection-keys:
