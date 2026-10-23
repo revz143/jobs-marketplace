@@ -1,12 +1,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY Directory.Build.props JobsMarketplace.sln ./
+COPY Directory.Build.props JobsMarketplace.sln NuGet.Config ./
 COPY src/Marketplace.Core/Marketplace.Core.csproj src/Marketplace.Core/
 COPY src/Marketplace.Persistence/Marketplace.Persistence.csproj src/Marketplace.Persistence/
 COPY src/Marketplace.Api/Marketplace.Api.csproj src/Marketplace.Api/
-RUN dotnet restore src/Marketplace.Api/Marketplace.Api.csproj
+RUN dotnet restore src/Marketplace.Api/Marketplace.Api.csproj --configfile NuGet.Config --force
 COPY src/ src/
-RUN dotnet publish src/Marketplace.Api/Marketplace.Api.csproj -c Release -o /app/publish --no-restore
+RUN dotnet publish src/Marketplace.Api/Marketplace.Api.csproj -c Release -o /app/publish --configfile NuGet.Config
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
