@@ -1,6 +1,13 @@
 const http = require('http');
 const { createMarketplace } = require('./marketplace');
 
+class HttpError extends Error {
+  constructor(statusCode, message) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     let rawData = '';
@@ -51,7 +58,13 @@ function createApiServer() {
       }
 
       if (method === 'POST' && url.pathname === '/jobs') {
-        const job = marketplace.createJob(await readJsonBody(req));
+        const payload = await readJsonBody(req);
+        let job;
+        try {
+          job = marketplace.createJob(payload);
+        } catch (error) {
+          throw new HttpError(400, error.message);
+        }
         sendJson(res, 201, { job });
         return;
       }
@@ -62,7 +75,13 @@ function createApiServer() {
       }
 
       if (method === 'POST' && url.pathname === '/subcontractors') {
-        const subcontractor = marketplace.createSubcontractor(await readJsonBody(req));
+        const payload = await readJsonBody(req);
+        let subcontractor;
+        try {
+          subcontractor = marketplace.createSubcontractor(payload);
+        } catch (error) {
+          throw new HttpError(400, error.message);
+        }
         sendJson(res, 201, { subcontractor });
         return;
       }
@@ -72,14 +91,28 @@ function createApiServer() {
         const jobId = Number(outsourceMatch[1]);
         const payload = await readJsonBody(req);
         const subcontractorId = Number(payload.subcontractorId);
-        const job = marketplace.outsourceJob(jobId, subcontractorId);
+        let job;
+        try {
+          job = marketplace.outsourceJob(jobId, subcontractorId);
+        } catch (error) {
+          if (error.message === 'Job not found' || error.message === 'Subcontractor not found') {
+            throw new HttpError(404, error.message);
+          }
+
+          throw new HttpError(400, error.message);
+        }
         sendJson(res, 200, { job });
         return;
       }
 
       sendJson(res, 404, { error: 'Not found' });
     } catch (error) {
-      sendJson(res, 400, { error: error.message });
+      if (error instanceof HttpError) {
+        sendJson(res, error.statusCode, { error: error.message });
+        return;
+      }
+
+      sendJson(res, 500, { error: 'Internal server error' });
     }
   });
 }

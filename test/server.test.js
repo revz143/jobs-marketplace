@@ -35,7 +35,7 @@ test('creates jobs and outsources them to subcontractors', async () => {
     assert.equal(createSubcontractorResponse.status, 201);
     const createSubcontractorBody = await createSubcontractorResponse.json();
 
-    const outsourceResponse = await request(baseUrl, '/jobs/1/outsource', {
+    const outsourceResponse = await request(baseUrl, `/jobs/${createJobBody.job.id}/outsource`, {
       method: 'POST',
       body: JSON.stringify({ subcontractorId: createSubcontractorBody.subcontractor.id }),
     });
@@ -81,6 +81,42 @@ test('returns validation errors for missing required fields', async () => {
     assert.equal(createJobResponse.status, 400);
     const body = await createJobResponse.json();
     assert.equal(body.error, 'Job title is required');
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+});
+
+test('returns not found when outsourcing a missing job', async () => {
+  const server = createApiServer();
+  await new Promise((resolve) => server.listen(0, resolve));
+
+  const address = server.address();
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  try {
+    const createSubcontractorResponse = await request(baseUrl, '/subcontractors', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Acme Agency' }),
+    });
+    assert.equal(createSubcontractorResponse.status, 201);
+    const createSubcontractorBody = await createSubcontractorResponse.json();
+
+    const outsourceResponse = await request(baseUrl, '/jobs/999/outsource', {
+      method: 'POST',
+      body: JSON.stringify({ subcontractorId: createSubcontractorBody.subcontractor.id }),
+    });
+
+    assert.equal(outsourceResponse.status, 404);
+    const body = await outsourceResponse.json();
+    assert.equal(body.error, 'Job not found');
   } finally {
     await new Promise((resolve, reject) => {
       server.close((error) => {
