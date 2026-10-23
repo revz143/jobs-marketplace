@@ -1,0 +1,17 @@
+{
+  "name": "jobs-marketplace",
+  "version": "1.0.0",
+  "description": "Demo marketplace API for outsourcing jobs to subcontractors",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/revz143/jobs-marketplace.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
