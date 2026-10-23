@@ -123,3 +123,23 @@ test('returns validation error for invalid subcontractorId', async () => {
     assert.equal(body.error, 'Valid subcontractorId is required');
   });
 });
+
+test('returns not found when subcontractor does not exist', async () => {
+  await withServer(async (baseUrl) => {
+    const createJobResponse = await request(baseUrl, '/jobs', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Write copy' }),
+    });
+    assert.equal(createJobResponse.status, 201);
+    const createJobBody = await createJobResponse.json();
+
+    const outsourceResponse = await request(baseUrl, `/jobs/${createJobBody.job.id}/outsource`, {
+      method: 'POST',
+      body: JSON.stringify({ subcontractorId: 999 }),
+    });
+
+    assert.equal(outsourceResponse.status, 404);
+    const body = await outsourceResponse.json();
+    assert.equal(body.error, 'Subcontractor not found');
+  });
+});
