@@ -1,4 +1,5 @@
 using System.Data;
+using System.Linq.Expressions;
 using Marketplace.Core;
 using Marketplace.Persistence;
 using Microsoft.AspNetCore.Builder;
@@ -62,21 +63,26 @@ public static class MarketplaceEndpoints
         return Results.Ok(Page(items, pageSize, x => x.Id));
     }
 
-    private static async Task<IResult> ListJobsAsync(string? q, string? status, decimal? minBudget, decimal? maxBudget, DateOnly? dueFrom, DateOnly? dueTo, long? cursor, int? limit, MarketplaceDbContext db, CancellationToken ct)
+    private static async Task<IResult> ListJobsAsync(string? q, string? status, string? scope, decimal? minBudget, decimal? maxBudget, DateOnly? dueFrom, DateOnly? dueTo, long? cursor, int? limit, HttpContext context, ActorResolver actors, MarketplaceDbContext db, CancellationToken ct)
     {
         var size = PageSize(limit); if (size.Error is not null) return size.Error; var pageSize = size.Value ?? 20;
         if (minBudget is > 0 && maxBudget is > 0 && minBudget > maxBudget) return Results.ValidationProblem(new Dictionary<string, string[]> { ["maxBudget"] = ["Must be at least minBudget."] });
+        var customerId = await actors.CustomerIdAsync(context.User, ct); var contractorId = await actors.ContractorIdAsync(context.User, ct);
         var query = db.Jobs.AsNoTracking().Where(x => !x.IsDeleted && (cursor == null || x.Id > cursor));
+        if (scope is "owned" && customerId is long ownerId) query = query.Where(x => x.CustomerId == ownerId);
+        else if (scope is "offered" && contractorId is long offererId) query = query.Where(x => x.Offers.Any(offer => !offer.IsDeleted && offer.ContractorId == offererId));
+        else if (!string.IsNullOrWhiteSpace(scope) && scope is not "all") return Results.ValidationProblem(new Dictionary<string, string[]> { ["scope"] = ["Use all, owned, or offered."] });
         if (!string.IsNullOrWhiteSpace(q)) { if (q.Trim().Length > 100) return Results.ValidationProblem(new Dictionary<string, string[]> { ["q"] = ["Must be 100 characters or fewer."] }); query = query.Where(x => EF.Functions.ILike(x.Description, $"%{SearchText.EscapeLike(q.Trim())}%", "\\")); }
         if (Enum.TryParse<JobStatus>(status, true, out var parsed)) query = query.Where(x => x.Status == parsed); else if (!string.IsNullOrWhiteSpace(status)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["status"] = ["Use Open or Awarded."] });
         if (minBudget is not null) query = query.Where(x => x.Budget >= minBudget); if (maxBudget is not null) query = query.Where(x => x.Budget <= maxBudget); if (dueFrom is not null) query = query.Where(x => x.DueDate >= dueFrom); if (dueTo is not null) query = query.Where(x => x.DueDate <= dueTo);
-        var items = await query.OrderBy(x => x.Id).Select(JobProjection).Take(pageSize + 1).ToListAsync(ct).ConfigureAwait(false);
+        var items = await query.OrderBy(x => x.Id).Select(JobProjection(customerId, contractorId)).Take(pageSize + 1).ToListAsync(ct).ConfigureAwait(false);
         return Results.Ok(Page(items, pageSize, x => x.Id));
     }
 
-    private static async Task<IResult> GetJobAsync(long jobId, MarketplaceDbContext db, CancellationToken ct)
+    private static async Task<IResult> GetJobAsync(long jobId, HttpContext context, ActorResolver actors, MarketplaceDbContext db, CancellationToken ct)
     {
-        var job = await db.Jobs.AsNoTracking().Where(x => x.Id == jobId && !x.IsDeleted).Select(JobProjection).SingleOrDefaultAsync(ct).ConfigureAwait(false);
+        var customerId = await actors.CustomerIdAsync(context.User, ct); var contractorId = await actors.ContractorIdAsync(context.User, ct);
+        var job = await db.Jobs.AsNoTracking().Where(x => x.Id == jobId && !x.IsDeleted).Select(JobProjection(customerId, contractorId)).SingleOrDefaultAsync(ct).ConfigureAwait(false);
         return job is null ? Results.NotFound() : Results.Ok(job);
     }
 
@@ -107,7 +113,7 @@ public static class MarketplaceEndpoints
         var job = await db.Jobs.AsNoTracking().Where(x => x.Id == jobId && !x.IsDeleted).Select(x => new { x.CustomerId, x.Budget }).SingleOrDefaultAsync(ct).ConfigureAwait(false); if (job is null) return Results.NotFound();
         var customerId = await actors.CustomerIdAsync(context.User, ct); var contractorId = await actors.ContractorIdAsync(context.User, ct); if (customerId != job.CustomerId && contractorId is null) return Results.Forbid();
         var offers = db.Offers.AsNoTracking().Where(x => x.JobId == jobId && !x.IsDeleted); if (customerId != job.CustomerId) offers = offers.Where(x => x.ContractorId == contractorId);
-        return Results.Ok(await offers.OrderBy(x => x.Id).Select(x => new OfferResponse(x.Id, x.JobId, x.ContractorId, x.Price, x.Price > job.Budget, x.CreatedAt)).ToListAsync(ct).ConfigureAwait(false));
+        return Results.Ok(await offers.OrderBy(x => x.Id).Select(OfferProjection(job.Budget)).ToListAsync(ct).ConfigureAwait(false));
     }
 
     private static async Task<IResult> CreateOfferAsync(long jobId, SaveOfferRequest request, HttpContext context, ActorResolver actors, MarketplaceDbContext db, CancellationToken ct)
@@ -115,13 +121,13 @@ public static class MarketplaceEndpoints
         if (request.Price <= 0 || decimal.Round(request.Price, 2) != request.Price) return Results.ValidationProblem(new Dictionary<string, string[]> { ["price"] = ["Must be a positive amount with at most two decimal places."] });
         var contractorId = await actors.ContractorIdAsync(context.User, ct); if (contractorId is null) return Results.Forbid(); await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct).ConfigureAwait(false); var job = await LockedJobAsync(db, jobId, ct); if (job is null || job.IsDeleted) return Results.NotFound(); if (job.Status != JobStatus.Open) return Results.Conflict(new { title = "Job is already awarded." });
         if (await db.Offers.AnyAsync(x => x.JobId == jobId && x.ContractorId == contractorId && !x.IsDeleted, ct).ConfigureAwait(false)) return Results.Conflict(new { title = "This contractor already has an active offer." });
-        var offer = new JobOffer { JobId = jobId, ContractorId = contractorId.Value, Price = request.Price }; db.Offers.Add(offer); await db.SaveChangesAsync(ct).ConfigureAwait(false); await transaction.CommitAsync(ct).ConfigureAwait(false); return Results.Created($"/api/v1/jobs/{jobId}/offers/{offer.Id}", new OfferResponse(offer.Id, jobId, offer.ContractorId, offer.Price, offer.Price > job.Budget, offer.CreatedAt));
+        var offer = new JobOffer { JobId = jobId, ContractorId = contractorId.Value, Price = request.Price }; db.Offers.Add(offer); await db.SaveChangesAsync(ct).ConfigureAwait(false); await transaction.CommitAsync(ct).ConfigureAwait(false); var response = await db.Offers.AsNoTracking().Where(x => x.Id == offer.Id).Select(OfferProjection(job.Budget)).SingleAsync(ct).ConfigureAwait(false); return Results.Created($"/api/v1/jobs/{jobId}/offers/{offer.Id}", response);
     }
 
     private static async Task<IResult> UpdateOfferAsync(long jobId, long offerId, SaveOfferRequest request, HttpContext context, ActorResolver actors, MarketplaceDbContext db, CancellationToken ct)
     {
         if (request.Price <= 0 || decimal.Round(request.Price, 2) != request.Price) return Results.ValidationProblem(new Dictionary<string, string[]> { ["price"] = ["Must be a positive amount with at most two decimal places."] });
-        var contractorId = await actors.ContractorIdAsync(context.User, ct); if (contractorId is null) return Results.Forbid(); await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct).ConfigureAwait(false); var job = await LockedJobAsync(db, jobId, ct); if (job is null || job.IsDeleted) return Results.NotFound(); var offer = await db.Offers.SingleOrDefaultAsync(x => x.Id == offerId && x.JobId == jobId && !x.IsDeleted, ct).ConfigureAwait(false); if (offer is null) return Results.NotFound(); if (job.Status != JobStatus.Open || offer.ContractorId != contractorId) return Results.Forbid(); offer.Price = request.Price; offer.UpdatedAt = DateTimeOffset.UtcNow; await db.SaveChangesAsync(ct).ConfigureAwait(false); await transaction.CommitAsync(ct).ConfigureAwait(false); return Results.Ok(new OfferResponse(offer.Id, offer.JobId, offer.ContractorId, offer.Price, offer.Price > job.Budget, offer.CreatedAt));
+        var contractorId = await actors.ContractorIdAsync(context.User, ct); if (contractorId is null) return Results.Forbid(); await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct).ConfigureAwait(false); var job = await LockedJobAsync(db, jobId, ct); if (job is null || job.IsDeleted) return Results.NotFound(); var offer = await db.Offers.SingleOrDefaultAsync(x => x.Id == offerId && x.JobId == jobId && !x.IsDeleted, ct).ConfigureAwait(false); if (offer is null) return Results.NotFound(); if (job.Status != JobStatus.Open || offer.ContractorId != contractorId) return Results.Forbid(); offer.Price = request.Price; offer.UpdatedAt = DateTimeOffset.UtcNow; await db.SaveChangesAsync(ct).ConfigureAwait(false); await transaction.CommitAsync(ct).ConfigureAwait(false); var response = await db.Offers.AsNoTracking().Where(x => x.Id == offer.Id).Select(OfferProjection(job.Budget)).SingleAsync(ct).ConfigureAwait(false); return Results.Ok(response);
     }
 
     private static async Task<IResult> DeleteOfferAsync(long jobId, long offerId, HttpContext context, ActorResolver actors, MarketplaceDbContext db, CancellationToken ct)
@@ -142,8 +148,9 @@ public static class MarketplaceEndpoints
     }
 
     private static async Task<Job?> LockedJobAsync(MarketplaceDbContext db, long id, CancellationToken ct) => await db.Jobs.FromSqlInterpolated($"SELECT * FROM jobs WHERE id = {id} FOR UPDATE").SingleOrDefaultAsync(ct).ConfigureAwait(false);
-    private static readonly System.Linq.Expressions.Expression<Func<Job, JobResponse>> JobProjection = x => new JobResponse(x.Id, x.CustomerId, x.StartDate, x.DueDate, x.Budget, x.Description, x.Status, x.AcceptedOffer == null ? null : x.AcceptedOffer.ContractorId, x.CreatedAt);
-    private static JobResponse ToResponse(Job job, long? acceptedBy = null) => new(job.Id, job.CustomerId, job.StartDate, job.DueDate, job.Budget, job.Description, job.Status, acceptedBy, job.CreatedAt);
+    private static Expression<Func<Job, JobResponse>> JobProjection(long? customerId, long? contractorId) => x => new JobResponse(x.Id, x.CustomerId, x.StartDate, x.DueDate, x.Budget, x.Description, x.Status, x.AcceptedOffer == null ? null : x.AcceptedOffer.ContractorId, customerId != null && x.CustomerId == customerId ? x.Offers.Count(offer => !offer.IsDeleted) : null, contractorId != null && x.Offers.Any(offer => !offer.IsDeleted && offer.ContractorId == contractorId), x.CreatedAt);
+    private static Expression<Func<JobOffer, OfferResponse>> OfferProjection(decimal budget) => x => new OfferResponse(x.Id, x.JobId, x.ContractorId, x.Contractor.Name, x.Contractor.Rating, x.Price, x.Price > budget, x.CreatedAt);
+    private static JobResponse ToResponse(Job job, long? acceptedBy = null) => new(job.Id, job.CustomerId, job.StartDate, job.DueDate, job.Budget, job.Description, job.Status, acceptedBy, null, false, job.CreatedAt);
     private static IResult? ValidateJob(SaveJobRequest request) => request.StartDate == default || request.DueDate < request.StartDate || request.Budget <= 0 || decimal.Round(request.Budget, 2) != request.Budget || string.IsNullOrWhiteSpace(request.Description) ? Results.ValidationProblem(new Dictionary<string, string[]> { ["job"] = ["Supply valid dates, a positive two-decimal budget, and a description."] }) : null;
     private static (IResult? Error, int? Value) PageSize(int? value) => value is < 1 or > 100 ? (Results.ValidationProblem(new Dictionary<string, string[]> { ["limit"] = ["Must be from 1 to 100."] }), null) : (null, value ?? 20);
     private static (IResult? Error, string? Value) ValidateSearch(string? value) => string.IsNullOrWhiteSpace(value) || value.Trim().Length is < 2 or > 100 ? (Results.ValidationProblem(new Dictionary<string, string[]> { ["search"] = ["Search text must contain 2 to 100 characters."] }), null) : (null, value);

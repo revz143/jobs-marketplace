@@ -12,9 +12,9 @@ public sealed record CustomerResponse(long Id, string FirstName, string LastName
 /// <summary>Contractor search projection.</summary>
 public sealed record ContractorResponse(long Id, string Name, decimal Rating);
 /// <summary>Job representation returned by the API.</summary>
-public sealed record JobResponse(long Id, long CustomerId, DateOnly StartDate, DateOnly DueDate, decimal Budget, string Description, JobStatus Status, long? AcceptedBy, DateTimeOffset CreatedAt);
+public sealed record JobResponse(long Id, long CustomerId, DateOnly StartDate, DateOnly DueDate, decimal Budget, string Description, JobStatus Status, long? AcceptedBy, int? OfferCount, bool HasCurrentUserOffer, DateTimeOffset CreatedAt);
 /// <summary>Offer representation returned only to its contractor or the job customer.</summary>
-public sealed record OfferResponse(long Id, long JobId, long ContractorId, decimal Price, bool IsOverBudget, DateTimeOffset CreatedAt);
+public sealed record OfferResponse(long Id, long JobId, long ContractorId, string ContractorName, decimal ContractorRating, decimal Price, bool IsOverBudget, DateTimeOffset CreatedAt);
 /// <summary>Input for creating or changing a job.</summary>
 public sealed record SaveJobRequest([property: Required] DateOnly StartDate, [property: Required] DateOnly DueDate, [property: Range(typeof(decimal), "0.01", "9999999999999999.99")] decimal Budget, [property: Required, StringLength(5000, MinimumLength = 1)] string Description);
 /// <summary>Input for creating or changing an offer.</summary>
