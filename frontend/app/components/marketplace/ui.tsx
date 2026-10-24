@@ -1,5 +1,5 @@
-import { CheckCircle2, FileText, SearchX } from "lucide-react";
-import type { ReactNode } from "react";
+import { CheckCircle2, FileText, SearchX, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import styles from "../../workspace.module.css";
 import type { JobStatus } from "../../lib/marketplace-types";
 
@@ -12,5 +12,14 @@ export function EmptyState({ title, description, action }: { title: string; desc
 }
 
 export function Toast({ message }: { message: string }) {
-  return <p className={styles.toast} role="status"><CheckCircle2 aria-hidden="true" />{message}</p>;
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    setVisible(true);
+    const timeout = window.setTimeout(() => setVisible(false), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [message]);
+
+  if (!visible) return null;
+  return <div className={styles.toast} role="status"><CheckCircle2 aria-hidden="true" /><span>{message}</span><button type="button" onClick={() => setVisible(false)} aria-label="Dismiss notification"><X size={15} aria-hidden="true" /></button></div>;
 }
