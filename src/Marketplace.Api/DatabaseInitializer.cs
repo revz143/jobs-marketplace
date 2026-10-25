@@ -26,9 +26,10 @@ public sealed class DatabaseInitializer(MarketplaceDbContext db, UserManager<App
         var contractors = Enumerable.Range(0, 50).Select(i => new Contractor { Name = $"{businessTerms[i % businessTerms.Length]} {new[] { "Build", "Works", "Studio", "Services", "Contracting" }[i % 5]}", Rating = 3m + (i % 21) / 10m, UserId = i < contractorUsers.Count ? contractorUsers[i].Id : null }).ToList();
         db.AddRange(customers); db.AddRange(contractors); await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var jobs = Enumerable.Range(0, 120).Select(i => new Job { CustomerId = customers[i % customers.Count].Id, StartDate = today.AddDays(i % 14), DueDate = today.AddDays(14 + i % 45), Budget = 10000m + (i % 12) * 5000m, Description = $"{new[] { "Office refresh", "Electrical inspection", "Kitchen fit-out", "Facade repair", "Workshop extension", "Roof assessment" }[i % 6]} — presentation job #{i + 1}." }).ToList();
+        var now = DateTimeOffset.UtcNow;
+        var jobs = Enumerable.Range(0, 120).Select(i => Job.Create(customers[i % customers.Count].Id, new SaveJobCommand(today.AddDays(i % 14), today.AddDays(14 + i % 45), 10000m + (i % 12) * 5000m, $"{new[] { "Office refresh", "Electrical inspection", "Kitchen fit-out", "Facade repair", "Workshop extension", "Roof assessment" }[i % 6]} — presentation job #{i + 1}."), now)).ToList();
         db.AddRange(jobs); await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        var offers = Enumerable.Range(0, 350).Select(i => new JobOffer { JobId = jobs[i % jobs.Count].Id, ContractorId = contractors[(i / jobs.Count + i) % contractors.Count].Id, Price = 9000m + (i % 20) * 2750m }).GroupBy(x => new { x.JobId, x.ContractorId }).Select(x => x.First()).ToList();
+        var offers = Enumerable.Range(0, 350).Select(i => JobOffer.Create(jobs[i % jobs.Count].Id, contractors[(i / jobs.Count + i) % contractors.Count].Id, new SaveOfferCommand(9000m + (i % 20) * 2750m), now)).GroupBy(x => new { x.JobId, x.ContractorId }).Select(x => x.First()).ToList();
         db.AddRange(offers); await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         logger.LogInformation("Seeded {Customers} customers, {Contractors} contractors, {Jobs} jobs and {Offers} offers.", customers.Count, contractors.Count, jobs.Count, offers.Count);
     }

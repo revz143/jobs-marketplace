@@ -45,6 +45,42 @@ docker compose up --build
 
 The initializer creates 200 customers, 50 contractors, 120 jobs, and a representative set of offers. It performs no work on later starts once profiles exist, so normal starts do not duplicate data.
 
+## Inspect the database?
+
+PostgreSQL deliberately has **no host port** in `compose.yaml`; it is reachable
+only from the Compose network. That keeps the local demonstration database out
+of the host network while still making it easy to inspect through Docker.
+
+Confirm the stack is ready, then open a PostgreSQL shell in the database
+container:
+
+```bash
+docker compose ps
+docker compose exec db psql -U marketplace -d marketplace
+```
+
+Useful `psql` commands:
+
+```sql
+\dt
+SELECT id, first_name, last_name FROM customers LIMIT 10;
+SELECT id, description, status FROM jobs LIMIT 10;
+SELECT id, job_id, contractor_id, price FROM job_offers LIMIT 10;
+\q
+```
+
+To browse tables with a local GUI such as pgAdmin or DBeaver, temporarily add
+the following under the `db` service in `compose.yaml`, then run
+`docker compose up -d`:
+
+```yaml
+ports:
+  - "127.0.0.1:5432:5432"
+```
+
+Connect the GUI to `localhost:5432` with database, username, and password all
+set to `marketplace`. Remove the temporary port mapping when finished.
+
 ## Five-minute walkthrough
 
 1. Sign in as `customer1@marketplace.test`; create a job using the right-hand form.
@@ -68,6 +104,33 @@ All endpoints are under `/api/v1`. OpenAPI JSON is served by the API and Scalar 
 | `POST /jobs/{id}/offers/{offerId}/accept` | Atomically awards an offer to the job owner. |
 
 All ID values serialize as strings so JavaScript never loses `bigint` precision. Lists use `{ items, nextCursor }`, default to 20, and are capped at 100. Browser write calls first obtain `/auth/csrf` and send its cookie value as `X-XSRF-TOKEN`.
+
+### Test authenticated endpoints in Scalar
+
+Scalar is served at [http://localhost:8080/scalar](http://localhost:8080/scalar).
+The API uses cookie authentication plus double-submit CSRF protection, so use
+these steps before testing a protected endpoint in Scalar:
+
+1. Execute `GET /api/v1/auth/csrf` and copy the `token` from its JSON response.
+2. Execute `POST /api/v1/auth/login` with header
+   `X-XSRF-TOKEN: <copied token>` and this body:
+
+   ```json
+   {
+     "email": "customer1@marketplace.test",
+     "password": "Demo!12345"
+   }
+   ```
+
+   A successful login returns `204 No Content` and stores the authentication
+   cookie in the browser.
+3. Execute `GET /api/v1/customers?lastName=sm&limit=20`. It returns `200 OK`
+   when the authentication cookie is present. Any demo account can make this
+   authenticated read.
+
+The login endpoint is rate-limited to five attempts per minute per IP. For a
+scriptable version of the same flow, use the request sequence in
+`marketplace.http` with a REST client that preserves cookies.
 
 ## Design choices
 

@@ -54,7 +54,15 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 builder.WebHost.ConfigureKestrel(options => { options.Limits.MaxRequestBodySize = 64 * 1024; options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(10); });
-builder.Services.AddSingleton(TimeProvider.System); builder.Services.AddSingleton<IProfileCache, LruProfileCache>(); builder.Services.AddScoped<ActorResolver>(); builder.Services.AddScoped<DatabaseInitializer>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<IProfileCache, LruProfileCache>();
+builder.Services.AddScoped<ActorResolver>();
+builder.Services.AddScoped<ICurrentActor>(services => services.GetRequiredService<ActorResolver>());
+builder.Services.AddScoped<IProfileQueries, EfProfileQueries>();
+builder.Services.AddScoped<IJobQueries, EfJobQueries>();
+builder.Services.AddScoped<IJobCommands, EfJobCommands>();
+builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(builder.Configuration["DataProtection:Path"] ?? "/keys"));
 var app = builder.Build();
 if (args.Contains("--migrate", StringComparer.Ordinal)) { using var scope = app.Services.CreateScope(); await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().InitializeAsync(CancellationToken.None); return; }

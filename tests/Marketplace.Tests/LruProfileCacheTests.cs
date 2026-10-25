@@ -1,5 +1,4 @@
 using FluentAssertions;
-using Marketplace.Api;
 using Marketplace.Core;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
